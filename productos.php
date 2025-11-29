@@ -1,3 +1,54 @@
+<?php
+// Procesar creación de categoría por AJAX
+if(isset($_POST['accion']) && $_POST['accion'] == 'crear_categoria') {
+    // NO cargar header ni nada
+    require_once __DIR__ . '/config/database.php';
+    
+    // Limpiar cualquier salida previa
+    ob_clean();
+    
+    $conn = getConnection();
+    $nombre = trim($_POST['nombre'] ?? '');
+    $descripcion = trim($_POST['descripcion'] ?? '');
+    
+    // Forzar tipo de contenido JSON
+    header('Content-Type: application/json; charset=utf-8');
+    
+    if($nombre) {
+        $stmt = $conn->prepare("INSERT INTO categorias (nombre, descripcion) VALUES (?, ?)");
+        $stmt->bind_param("ss", $nombre, $descripcion);
+        
+        if($stmt->execute()) {
+            $nuevo_id = $conn->insert_id;
+            $stmt->close();
+            $conn->close();
+            
+            echo json_encode([
+                'success' => true, 
+                'id' => $nuevo_id, 
+                'nombre' => $nombre
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        } else {
+            $error = $conn->error;
+            $stmt->close();
+            $conn->close();
+            
+            echo json_encode([
+                'success' => false, 
+                'mensaje' => 'Error BD: ' . $error
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+    } else {
+        echo json_encode([
+            'success' => false, 
+            'mensaje' => 'Nombre requerido'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+}
+?>
 <?php include 'includes/header.php'; ?>
 
 <?php
@@ -11,7 +62,7 @@ if(isset($_GET['delete'])) {
     $mensaje = '<div class="alert alert-success">Producto eliminado correctamente</div>';
 }
 
-if($_SERVER['REQUEST_METHOD'] == 'POST') {
+if($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['accion'])) {
     $id = $_POST['id'] ?? '';
     $nombre = $_POST['nombre'];
     $descripcion = $_POST['descripcion'];
@@ -20,13 +71,11 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
     $categoria_id = $_POST['categoria_id'];
     
     if($id) {
-        // Actualizar
         $stmt = $conn->prepare("UPDATE productos SET nombre=?, descripcion=?, precio=?, stock=?, categoria_id=? WHERE id=?");
         $stmt->bind_param("ssdiii", $nombre, $descripcion, $precio, $stock, $categoria_id, $id);
         $stmt->execute();
         $mensaje = '<div class="alert alert-success">Producto actualizado correctamente</div>';
     } else {
-        // Insertar
         $stmt = $conn->prepare("INSERT INTO productos (nombre, descripcion, precio, stock, categoria_id) VALUES (?, ?, ?, ?, ?)");
         $stmt->bind_param("ssdii", $nombre, $descripcion, $precio, $stock, $categoria_id);
         $stmt->execute();
@@ -34,15 +83,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-// Obtener productos
-$productos = $conn->query("
-    SELECT p.*, c.nombre as categoria_nombre 
-    FROM productos p 
-    LEFT JOIN categorias c ON p.categoria_id = c.id 
-    ORDER BY p.id DESC
-");
-
-// Obtener categorías
+$productos = $conn->query("SELECT p.*, c.nombre as categoria_nombre FROM productos p LEFT JOIN categorias c ON p.categoria_id = c.id ORDER BY p.id DESC");
 $categorias = $conn->query("SELECT * FROM categorias");
 ?>
 
@@ -92,7 +133,6 @@ $categorias = $conn->query("SELECT * FROM categorias");
     </div>
 </div>
 
-<!-- Modal -->
 <div id="modalProducto" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -114,14 +154,22 @@ $categorias = $conn->query("SELECT * FROM categorias");
             
             <div class="form-group">
                 <label>Categoría</label>
-                <select name="categoria_id" id="producto_categoria" required>
-                    <?php 
-                    $categorias->data_seek(0);
-                    while($cat = $categorias->fetch_assoc()): 
-                    ?>
-                        <option value="<?php echo $cat['id']; ?>"><?php echo $cat['nombre']; ?></option>
-                    <?php endwhile; ?>
-                </select>
+                <div style="display: flex; gap: 8px;">
+                    <select name="categoria_id" id="producto_categoria" required style="flex: 1;">
+                        <?php 
+                        $categorias->data_seek(0);
+                        while($cat = $categorias->fetch_assoc()): 
+                        ?>
+                            <option value="<?php echo $cat['id']; ?>"><?php echo $cat['nombre']; ?></option>
+                        <?php endwhile; ?>
+                    </select>
+                    <button type="button" onclick="abrirModalNuevaCategoria()" class="btn" style="background: #10b981; color: white; padding: 8px 16px; white-space: nowrap;">
+                        ➕ Nueva
+                    </button>
+                </div>
+                <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+                    💡 Si no encuentras la categoría, créala con el botón "Nueva"
+                </p>
             </div>
             
             <div class="form-group">
@@ -135,7 +183,30 @@ $categorias = $conn->query("SELECT * FROM categorias");
             </div>
             
             <button type="submit" class="btn btn-primary">💾 Guardar</button>
-            <button type="button" onclick="closeModal('modalProducto')" class="btn btn-secondary">❌ Cancelar</button>
+            <button type="button" onclick="closeModal('modalProducto')" class="btn" style="background: #6b7280; color: white;">❌ Cancelar</button>
+        </form>
+    </div>
+</div>
+
+<div id="modalNuevaCategoria" class="modal">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3>🏷️ Crear Nueva Categoría</h3>
+            <span class="close" onclick="closeModal('modalNuevaCategoria')">&times;</span>
+        </div>
+        <form id="formNuevaCategoria">
+            <div class="form-group">
+                <label>Nombre de la Categoría *</label>
+                <input type="text" id="nueva_categoria_nombre" placeholder="Ej: Muebles de Jardín" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Descripción</label>
+                <textarea id="nueva_categoria_descripcion" rows="3" placeholder="Descripción opcional..."></textarea>
+            </div>
+            
+            <button type="button" onclick="guardarNuevaCategoria()" class="btn btn-primary">💾 Crear Categoría</button>
+            <button type="button" onclick="closeModal('modalNuevaCategoria')" class="btn" style="background: #6b7280; color: white;">❌ Cancelar</button>
         </form>
     </div>
 </div>
@@ -150,6 +221,52 @@ function editarProducto(producto) {
     document.getElementById('producto_precio').value = producto.precio;
     document.getElementById('producto_stock').value = producto.stock;
     openModal('modalProducto');
+}
+
+function abrirModalNuevaCategoria() {
+    document.getElementById('nueva_categoria_nombre').value = '';
+    document.getElementById('nueva_categoria_descripcion').value = '';
+    openModal('modalNuevaCategoria');
+}
+
+function guardarNuevaCategoria() {
+    const nombre = document.getElementById('nueva_categoria_nombre').value;
+    const descripcion = document.getElementById('nueva_categoria_descripcion').value;
+    
+    if(!nombre) {
+        alert('El nombre de la categoría es obligatorio');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('accion', 'crear_categoria');
+    formData.append('nombre', nombre);
+    formData.append('descripcion', descripcion);
+    
+    fetch('productos.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if(data.success) {
+            const select = document.getElementById('producto_categoria');
+            const option = document.createElement('option');
+            option.value = data.id;
+            option.text = data.nombre;
+            option.selected = true;
+            select.appendChild(option);
+            
+            closeModal('modalNuevaCategoria');
+            alert('✅ Categoría "' + data.nombre + '" creada correctamente');
+        } else {
+            alert('❌ Error: ' + data.mensaje);
+        }
+    })
+    .catch(error => {
+        alert('❌ Error al crear la categoría');
+        console.error(error);
+    });
 }
 </script>
 

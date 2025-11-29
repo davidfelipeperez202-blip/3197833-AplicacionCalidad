@@ -30,12 +30,13 @@ $current_page = basename($_SERVER['PHP_SELF']);
     </nav>
     
     <div class="navbar-menu">
-        <ul>
-            <li><a href="dashboard.php" class="<?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">📊 Dashboard</a></li>
-            <li><a href="productos.php" class="<?php echo $current_page == 'productos.php' ? 'active' : ''; ?>">📦 Productos</a></li>
-            <li><a href="clientes.php" class="<?php echo $current_page == 'clientes.php' ? 'active' : ''; ?>">👥 Clientes</a></li>
-            <li><a href="pedidos.php" class="<?php echo $current_page == 'pedidos.php' ? 'active' : ''; ?>">📋 Pedidos</a></li>
-        </ul>
-    </div>
+    <ul>
+        <li><a href="dashboard.php" class="<?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">📊 Dashboard</a></li>
+        <li><a href="categorias.php" class="<?php echo $current_page == 'categorias.php' ? 'active' : ''; ?>">🏷️ Categorías</a></li>
+        <li><a href="productos.php" class="<?php echo $current_page == 'productos.php' ? 'active' : ''; ?>">📦 Productos</a></li>
+        <li><a href="clientes.php" class="<?php echo $current_page == 'clientes.php' ? 'active' : ''; ?>">👥 Clientes</a></li>
+        <li><a href="pedidos.php" class="<?php echo $current_page == 'pedidos.php' ? 'active' : ''; ?>">📋 Pedidos</a></li>
+    </ul>
+</div>
     
     <div class="container">
