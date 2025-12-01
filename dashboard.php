@@ -1,4 +1,12 @@
-<?php include 'includes/header.php'; ?>
+<?php 
+// ✅ CORRECCIÓN: Validar archivo antes de incluir
+$header_path = __DIR__ . '/includes/header.php';
+if (file_exists($header_path)) {
+    include $header_path;
+} else {
+    die('Error: Archivo header.php no encontrado');
+}
+?>
 
 <?php
 $conn = getConnection();
@@ -34,7 +42,7 @@ $productos_bajo_stock = $conn->query("
     <div class="stat-card blue">
         <div>
             <div class="stat-label">Total Productos</div>
-            <div class="stat-value"><?php echo $total_productos; ?></div>
+            <div class="stat-value"><?php echo intval($total_productos); ?></div>
         </div>
         <div style="font-size: 48px;">📦</div>
     </div>
@@ -42,7 +50,7 @@ $productos_bajo_stock = $conn->query("
     <div class="stat-card green">
         <div>
             <div class="stat-label">Total Clientes</div>
-            <div class="stat-value"><?php echo $total_clientes; ?></div>
+            <div class="stat-value"><?php echo intval($total_clientes); ?></div>
         </div>
         <div style="font-size: 48px;">👥</div>
     </div>
@@ -50,7 +58,7 @@ $productos_bajo_stock = $conn->query("
     <div class="stat-card purple">
         <div>
             <div class="stat-label">Total Pedidos</div>
-            <div class="stat-value"><?php echo $total_pedidos; ?></div>
+            <div class="stat-value"><?php echo intval($total_pedidos); ?></div>
         </div>
         <div style="font-size: 48px;">📋</div>
     </div>
@@ -73,14 +81,19 @@ $productos_bajo_stock = $conn->query("
                 <tbody>
                     <?php while($pedido = $pedidos_recientes->fetch_assoc()): ?>
                         <tr>
-                            <td><?php echo $pedido['cliente_nombre']; ?></td>
-                            <td><?php echo $pedido['producto_nombre']; ?></td>
+                            <td><?php 
+                                // ✅ CORRECCIÓN #1: XSS - Escapar todas las salidas
+                                echo htmlspecialchars($pedido['cliente_nombre'], ENT_QUOTES, 'UTF-8'); 
+                            ?></td>
+                            <td><?php 
+                                echo htmlspecialchars($pedido['producto_nombre'], ENT_QUOTES, 'UTF-8'); 
+                            ?></td>
                             <td>
                                 <span class="badge badge-<?php 
                                     echo $pedido['estado'] == 'Completado' ? 'success' : 
                                         ($pedido['estado'] == 'En Proceso' ? 'warning' : 'info'); 
                                 ?>">
-                                    <?php echo $pedido['estado']; ?>
+                                    <?php echo htmlspecialchars($pedido['estado'], ENT_QUOTES, 'UTF-8'); ?>
                                 </span>
                             </td>
                         </tr>
@@ -105,10 +118,13 @@ $productos_bajo_stock = $conn->query("
                 <tbody>
                     <?php while($producto = $productos_bajo_stock->fetch_assoc()): ?>
                         <tr>
-                            <td><?php echo $producto['nombre']; ?></td>
+                            <td><?php 
+                                // ✅ CORRECCIÓN #2: XSS - Escapar salida de productos
+                                echo htmlspecialchars($producto['nombre'], ENT_QUOTES, 'UTF-8'); 
+                            ?></td>
                             <td>
                                 <span class="badge badge-warning">
-                                    <?php echo $producto['stock']; ?>
+                                    <?php echo intval($producto['stock']); ?>
                                 </span>
                             </td>
                         </tr>
@@ -121,5 +137,9 @@ $productos_bajo_stock = $conn->query("
 
 <?php 
 $conn->close();
-include 'includes/footer.php'; 
+// ✅ CORRECCIÓN: Validar archivo antes de incluir
+$footer_path = __DIR__ . '/includes/footer.php';
+if (file_exists($footer_path)) {
+    include $footer_path;
+}
 ?>

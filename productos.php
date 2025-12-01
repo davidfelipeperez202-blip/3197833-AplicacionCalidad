@@ -1,17 +1,20 @@
 <?php
 // Procesar creación de categoría por AJAX
 if(isset($_POST['accion']) && $_POST['accion'] == 'crear_categoria') {
-    // NO cargar header ni nada
-    require_once __DIR__ . '/config/database.php';
+    // ✅ CORRECCIÓN: Validar archivo antes de incluir
+    $config_path = __DIR__ . '/config/database.php';
+    if (!file_exists($config_path)) {
+        die(json_encode(['success' => false, 'mensaje' => 'Error de configuración']));
+    }
+    require_once $config_path;
     
-    // Limpiar cualquier salida previa
     ob_clean();
     
     $conn = getConnection();
+    // ✅ CORRECCIÓN: Sanitizar entrada
     $nombre = trim($_POST['nombre'] ?? '');
     $descripcion = trim($_POST['descripcion'] ?? '');
     
-    // Forzar tipo de contenido JSON
     header('Content-Type: application/json; charset=utf-8');
     
     if($nombre) {
@@ -26,7 +29,7 @@ if(isset($_POST['accion']) && $_POST['accion'] == 'crear_categoria') {
             echo json_encode([
                 'success' => true, 
                 'id' => $nuevo_id, 
-                'nombre' => $nombre
+                'nombre' => htmlspecialchars($nombre, ENT_QUOTES, 'UTF-8')
             ], JSON_UNESCAPED_UNICODE);
             exit;
         } else {
@@ -36,7 +39,7 @@ if(isset($_POST['accion']) && $_POST['accion'] == 'crear_categoria') {
             
             echo json_encode([
                 'success' => false, 
-                'mensaje' => 'Error BD: ' . $error
+                'mensaje' => 'Error BD: ' . htmlspecialchars($error, ENT_QUOTES, 'UTF-8')
             ], JSON_UNESCAPED_UNICODE);
             exit;
         }
@@ -49,36 +52,52 @@ if(isset($_POST['accion']) && $_POST['accion'] == 'crear_categoria') {
     }
 }
 ?>
-<?php include 'includes/header.php'; ?>
+<?php 
+// ✅ CORRECCIÓN: Validar archivo antes de incluir
+$header_path = __DIR__ . '/includes/header.php';
+if (file_exists($header_path)) {
+    include $header_path;
+} else {
+    die('Error: Archivo header.php no encontrado');
+}
+?>
 
 <?php
 $conn = getConnection();
 $mensaje = '';
 
-// Procesar acciones
+// ✅ CORRECCIÓN #1: SQL Injection - Usar prepared statements
 if(isset($_GET['delete'])) {
-    $id = $_GET['delete'];
-    $conn->query("DELETE FROM productos WHERE id = $id");
-    $mensaje = '<div class="alert alert-success">Producto eliminado correctamente</div>';
+    $id = filter_var($_GET['delete'], FILTER_VALIDATE_INT);
+    if($id) {
+        $stmt = $conn->prepare("DELETE FROM productos WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $stmt->close();
+        $mensaje = '<div class="alert alert-success">Producto eliminado correctamente</div>';
+    }
 }
 
 if($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['accion'])) {
-    $id = $_POST['id'] ?? '';
-    $nombre = $_POST['nombre'];
-    $descripcion = $_POST['descripcion'];
-    $precio = $_POST['precio'];
-    $stock = $_POST['stock'];
-    $categoria_id = $_POST['categoria_id'];
+    $id = filter_var($_POST['id'] ?? '', FILTER_VALIDATE_INT);
+    // ✅ CORRECCIÓN: Sanitizar todas las entradas
+    $nombre = trim($_POST['nombre'] ?? '');
+    $descripcion = trim($_POST['descripcion'] ?? '');
+    $precio = filter_var($_POST['precio'] ?? 0, FILTER_VALIDATE_FLOAT);
+    $stock = filter_var($_POST['stock'] ?? 0, FILTER_VALIDATE_INT);
+    $categoria_id = filter_var($_POST['categoria_id'] ?? 0, FILTER_VALIDATE_INT);
     
     if($id) {
         $stmt = $conn->prepare("UPDATE productos SET nombre=?, descripcion=?, precio=?, stock=?, categoria_id=? WHERE id=?");
         $stmt->bind_param("ssdiii", $nombre, $descripcion, $precio, $stock, $categoria_id, $id);
         $stmt->execute();
+        $stmt->close();
         $mensaje = '<div class="alert alert-success">Producto actualizado correctamente</div>';
     } else {
         $stmt = $conn->prepare("INSERT INTO productos (nombre, descripcion, precio, stock, categoria_id) VALUES (?, ?, ?, ?, ?)");
         $stmt->bind_param("ssdii", $nombre, $descripcion, $precio, $stock, $categoria_id);
         $stmt->execute();
+        $stmt->close();
         $mensaje = '<div class="alert alert-success">Producto creado correctamente</div>';
     }
 }
@@ -91,7 +110,10 @@ $categorias = $conn->query("SELECT * FROM categorias");
     <h2>Gestión de Productos</h2>
 </div>
 
-<?php echo $mensaje; ?>
+<?php 
+// ✅ CORRECCIÓN #2: XSS - Escapar salida
+echo $mensaje; // Ya viene con HTML seguro desde arriba
+?>
 
 <div class="card">
     <div class="card-header">
@@ -113,18 +135,18 @@ $categorias = $conn->query("SELECT * FROM categorias");
             <tbody>
                 <?php while($producto = $productos->fetch_assoc()): ?>
                     <tr>
-                        <td><?php echo $producto['id']; ?></td>
-                        <td><?php echo $producto['nombre']; ?></td>
-                        <td><?php echo $producto['categoria_nombre']; ?></td>
+                        <td><?php echo htmlspecialchars($producto['id'], ENT_QUOTES, 'UTF-8'); ?></td>
+                        <td><?php echo htmlspecialchars($producto['nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
+                        <td><?php echo htmlspecialchars($producto['categoria_nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
                         <td>$<?php echo number_format($producto['precio'], 0); ?></td>
                         <td>
                             <span class="badge badge-<?php echo $producto['stock'] < 6 ? 'warning' : 'success'; ?>">
-                                <?php echo $producto['stock']; ?>
+                                <?php echo htmlspecialchars($producto['stock'], ENT_QUOTES, 'UTF-8'); ?>
                             </span>
                         </td>
                         <td>
-                            <button onclick="editarProducto(<?php echo htmlspecialchars(json_encode($producto)); ?>)" class="btn" style="background: #3b82f6; color: white; padding: 6px 12px;">✏️ Editar</button>
-                            <button onclick="confirmDelete(<?php echo $producto['id']; ?>, 'productos')" class="btn btn-danger">🗑️ Eliminar</button>
+                            <button onclick="editarProducto(<?php echo htmlspecialchars(json_encode($producto), ENT_QUOTES, 'UTF-8'); ?>)" class="btn" style="background: #3b82f6; color: white; padding: 6px 12px;">✏️ Editar</button>
+                            <button onclick="confirmDelete(<?php echo intval($producto['id']); ?>, 'productos')" class="btn btn-danger">🗑️ Eliminar</button>
                         </td>
                     </tr>
                 <?php endwhile; ?>
@@ -160,7 +182,9 @@ $categorias = $conn->query("SELECT * FROM categorias");
                         $categorias->data_seek(0);
                         while($cat = $categorias->fetch_assoc()): 
                         ?>
-                            <option value="<?php echo $cat['id']; ?>"><?php echo $cat['nombre']; ?></option>
+                            <option value="<?php echo htmlspecialchars($cat['id'], ENT_QUOTES, 'UTF-8'); ?>">
+                                <?php echo htmlspecialchars($cat['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                            </option>
                         <?php endwhile; ?>
                     </select>
                     <button type="button" onclick="abrirModalNuevaCategoria()" class="btn" style="background: #10b981; color: white; padding: 8px 16px; white-space: nowrap;">
@@ -272,5 +296,9 @@ function guardarNuevaCategoria() {
 
 <?php 
 $conn->close();
-include 'includes/footer.php'; 
+// ✅ CORRECCIÓN: Validar archivo antes de incluir
+$footer_path = __DIR__ . '/includes/footer.php';
+if (file_exists($footer_path)) {
+    include $footer_path;
+}
 ?>

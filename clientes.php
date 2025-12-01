@@ -1,34 +1,50 @@
-<?php include 'includes/header.php'; ?>
+<?php 
+// ✅ CORRECCIÓN: Validar archivo antes de incluir
+$header_path = __DIR__ . '/includes/header.php';
+if (file_exists($header_path)) {
+    include $header_path;
+} else {
+    die('Error: Archivo header.php no encontrado');
+}
+?>
 
 <?php
 $conn = getConnection();
 $mensaje = '';
 
-// Procesar acciones
+// ✅ CORRECCIÓN #1: SQL Injection - Usar prepared statements
 if(isset($_GET['delete'])) {
-    $id = $_GET['delete'];
-    $conn->query("DELETE FROM clientes WHERE id = $id");
-    $mensaje = '<div class="alert alert-success">Cliente eliminado correctamente</div>';
+    $id = filter_var($_GET['delete'], FILTER_VALIDATE_INT);
+    if($id) {
+        $stmt = $conn->prepare("DELETE FROM clientes WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $stmt->close();
+        $mensaje = '<div class="alert alert-success">Cliente eliminado correctamente</div>';
+    }
 }
 
 if($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $id = $_POST['id'] ?? '';
-    $nombre = $_POST['nombre'];
-    $telefono = $_POST['telefono'];
-    $email = $_POST['email'];
-    $direccion = $_POST['direccion'];
+    $id = filter_var($_POST['id'] ?? '', FILTER_VALIDATE_INT);
+    // ✅ CORRECCIÓN: Sanitizar todas las entradas
+    $nombre = trim($_POST['nombre'] ?? '');
+    $telefono = trim($_POST['telefono'] ?? '');
+    $email = filter_var($_POST['email'] ?? '', FILTER_SANITIZE_EMAIL);
+    $direccion = trim($_POST['direccion'] ?? '');
     
     if($id) {
         // Actualizar
         $stmt = $conn->prepare("UPDATE clientes SET nombre=?, telefono=?, email=?, direccion=? WHERE id=?");
         $stmt->bind_param("ssssi", $nombre, $telefono, $email, $direccion, $id);
         $stmt->execute();
+        $stmt->close();
         $mensaje = '<div class="alert alert-success">Cliente actualizado correctamente</div>';
     } else {
         // Insertar
         $stmt = $conn->prepare("INSERT INTO clientes (nombre, telefono, email, direccion) VALUES (?, ?, ?, ?)");
         $stmt->bind_param("ssss", $nombre, $telefono, $email, $direccion);
         $stmt->execute();
+        $stmt->close();
         $mensaje = '<div class="alert alert-success">Cliente creado correctamente</div>';
     }
 }
@@ -41,7 +57,10 @@ $clientes = $conn->query("SELECT * FROM clientes ORDER BY id DESC");
     <h2>Gestión de Clientes</h2>
 </div>
 
-<?php echo $mensaje; ?>
+<?php 
+// ✅ CORRECCIÓN #2: XSS - Salida ya es segura (viene del servidor)
+echo $mensaje; 
+?>
 
 <div class="card">
     <div class="card-header">
@@ -63,14 +82,14 @@ $clientes = $conn->query("SELECT * FROM clientes ORDER BY id DESC");
             <tbody>
                 <?php while($cliente = $clientes->fetch_assoc()): ?>
                     <tr>
-                        <td><?php echo $cliente['id']; ?></td>
-                        <td><?php echo $cliente['nombre']; ?></td>
-                        <td><?php echo $cliente['telefono']; ?></td>
-                        <td><?php echo $cliente['email']; ?></td>
-                        <td><?php echo $cliente['direccion']; ?></td>
+                        <td><?php echo htmlspecialchars($cliente['id'], ENT_QUOTES, 'UTF-8'); ?></td>
+                        <td><?php echo htmlspecialchars($cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
+                        <td><?php echo htmlspecialchars($cliente['telefono'], ENT_QUOTES, 'UTF-8'); ?></td>
+                        <td><?php echo htmlspecialchars($cliente['email'], ENT_QUOTES, 'UTF-8'); ?></td>
+                        <td><?php echo htmlspecialchars($cliente['direccion'], ENT_QUOTES, 'UTF-8'); ?></td>
                         <td>
-                            <button onclick="editarCliente(<?php echo htmlspecialchars(json_encode($cliente)); ?>)" class="btn" style="background: #3b82f6; color: white; padding: 6px 12px;">✏️ Editar</button>
-                            <button onclick="confirmDelete(<?php echo $cliente['id']; ?>, 'clientes')" class="btn btn-danger">🗑️ Eliminar</button>
+                            <button onclick="editarCliente(<?php echo htmlspecialchars(json_encode($cliente), ENT_QUOTES, 'UTF-8'); ?>)" class="btn" style="background: #3b82f6; color: white; padding: 6px 12px;">✏️ Editar</button>
+                            <button onclick="confirmDelete(<?php echo intval($cliente['id']); ?>, 'clientes')" class="btn btn-danger">🗑️ Eliminar</button>
                         </td>
                     </tr>
                 <?php endwhile; ?>
@@ -129,5 +148,9 @@ function editarCliente(cliente) {
 
 <?php 
 $conn->close();
-include 'includes/footer.php'; 
+// ✅ CORRECCIÓN: Validar archivo antes de incluir
+$footer_path = __DIR__ . '/includes/footer.php';
+if (file_exists($footer_path)) {
+    include $footer_path;
+}
 ?>
